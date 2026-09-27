@@ -37,21 +37,12 @@ public sealed partial class TechWiseDetailedAssemblyRuntime
     }
     void CreateAdditionalFasteners()
     {
-        foreach (var id in new[]{"FanRear","FanFront1","FanFront2"})
-        {
-            var part = FindObjectsByType<XRGrabInteractable>(FindObjectsInactive.Include).First(p => p.GetComponent<TechWiseAssemblyPartId>()?.step == id);
-            // The retained 120 mm fan has a four-corner mounting pattern, 105 mm pitch.
-            float sign = id == "FanRear" ? -1 : 1;
-            var bounds = TechWiseComponentGeometry.BoundsOf(part.transform,out var b) ? b : new Bounds(Vector3.zero,Vector3.one*.12f);
-            float z = sign < 0 ? bounds.min.z : bounds.max.z;
-            foreach (int x in new[]{-1,1}) foreach(int y in new[]{-1,1})
-                ExtraScrews.Add(Screw(part.transform,part.transform.TransformPoint(new Vector3(x*.0525f,y*.0525f,z)),part.transform.forward*sign,id+" mounting screw",()=>Seated(id)));
-        }
+        // Fan mounting screws removed: case fans snap directly into their mounting positions without screws.
         // Audited in the retained FBX's component-local coordinates (not overall renderer bounds).
         // GPU pCube1167: the bent retaining flange, +Y face. PSU pCube927: rear plate, +X face.
         // SSD: centres of the four modeled circular holes on its +Z mounting face.
         AddMounts("GPU",Vector3.up,new[]{new Vector3(.0395f,.01703615f,.0038f),new Vector3(.0395f,.01703615f,-.0045f)});
-        AddMounts("Storage",Vector3.forward,new[]{new Vector3(-.01078045f,.0080158f,.001064f),new Vector3(-.01078045f,-.00814265f,.001064f),new Vector3(.00933635f,.0080158f,.001064f),new Vector3(.00933635f,-.00814265f,.001064f)});
+        // SATA SSD mounting screws removed: seats directly into case mount without screws.
         AddMounts("PSU",Vector3.right,new[]{new Vector3(.01861755f,-.009f,-.017f),new Vector3(.01861755f,-.009f,.017f),new Vector3(.01861755f,.009f,-.017f),new Vector3(.01861755f,.009f,.017f)});
     }
     void AddMounts(string id,Vector3 normal,Vector3[] points)
@@ -114,11 +105,12 @@ public sealed partial class TechWiseDetailedAssemblyRuntime
     void UpdateAvailability()
     {
         if(!Ready) return;
+        bool isFanPhase = CurrentPhase is TechWiseDetailedAssemblyRuntime.Phase.InstallRearFan or TechWiseDetailedAssemblyRuntime.Phase.InstallFrontFans;
         foreach(var id in new[]{"FanRear","FanFront1","FanFront2"})
         {
             var part=state.FindPart(id); if(part==null) continue;
             bool show=!TechWiseTutorialRuntime.InTutorial || TechWiseSimulationModeManager.IsDisassembly ||
-                !TechWiseTutorialRuntime.ControlsPending && (CurrentPartStep==id || Seated(id));
+                !TechWiseTutorialRuntime.ControlsPending && (isFanPhase || CurrentPartStep==id || Seated(id));
             conditionalObjects[part.gameObject]=!show;
             if(part.gameObject.activeSelf!=show) part.gameObject.SetActive(show);
         }

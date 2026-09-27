@@ -293,13 +293,13 @@ public sealed partial class TechWiseDetailedAssemblyRuntime : MonoBehaviour
             var target = mount.gameObject.AddComponent<XRLockSocketInteractor>(); target.interactionLayers = ~0; target.socketScaleMode = SocketScaleMode.None;
             mount.gameObject.AddComponent<TechWiseAssemblyPartId>().step = id;
             target.keychainLock.requiredKeys.Add(key); target.attachTransform = mount; target.hoverSocketSnapping = false;
-            var rule = mount.gameObject.AddComponent<TechWisePlacementRule>(); rule.exactOrientation = true; rule.distanceTolerance = .035f; rule.orientationTolerance = 10; rule.fastenAfterPlacement = true;
+            var rule = mount.gameObject.AddComponent<TechWisePlacementRule>(); rule.exactOrientation = true; rule.distanceTolerance = .035f; rule.orientationTolerance = 10; rule.fastenAfterPlacement = false;
             targets[id] = mount;
             mount.gameObject.SetActive(true);
             var arrow = new GameObject("Airflow arrow", typeof(LineRenderer)); arrow.transform.SetParent(obj.transform, false);
             var line = arrow.GetComponent<LineRenderer>(); line.useWorldSpace = false; line.sharedMaterial = assets.accent; line.widthMultiplier = .002f; line.positionCount = 5;
             line.SetPositions(new[] { new Vector3(.04f,0,-.018f),new Vector3(.04f,0,.04f),new Vector3(.025f,0,.025f),new Vector3(.04f,0,.04f),new Vector3(.055f,0,.025f) });
-            Label(obj.transform, i == 0 ? "REAR EXHAUST\nAirflow out" : i == 1 ? "UPPER INTAKE\nAirflow to interior" : "LOWER INTAKE\nAirflow to interior", .09f, () => CurrentPartStep == id);
+            Label(obj.transform, i == 0 ? "REAR EXHAUST\nAirflow out\n(No screws needed)" : i == 1 ? "UPPER INTAKE\nAirflow to interior\n(No screws needed)" : "LOWER INTAKE\nAirflow to interior\n(No screws needed)", .09f, () => !Seated(id) && (CurrentPhase is Phase.InstallRearFan or Phase.InstallFrontFans || CurrentPartStep == id));
         }
     }
     XRGrabInteractable AddGrab(GameObject obj, bool gravity)
@@ -496,8 +496,7 @@ public sealed partial class TechWiseDetailedAssemblyRuntime : MonoBehaviour
             if (!CasePrepared) return Phase.PrepareCase;
             if (!Seated("Motherboard")) return Phase.PlaceMotherboard;
             if (!StepFastened("Motherboard")) return Phase.TightenMotherboard;
-            if (!Seated("FanRear") || !StepFastened("FanRear")) return Phase.InstallRearFan;
-            if (!Seated("FanFront1") || !StepFastened("FanFront1") || !Seated("FanFront2") || !StepFastened("FanFront2")) return Phase.InstallFrontFans;
+            if (!AllFansSeated) return Phase.InstallRearFan;
             if (!FanAlignmentValid) return Phase.ValidateAirflow;
             if (HasGpuConnector && !Seated("GPUConnector")) return Phase.InstallGpuConnector;
             if (!Seated("GPU") || !StepFastened("GPU")) return Phase.InstallGpu;
@@ -507,9 +506,10 @@ public sealed partial class TechWiseDetailedAssemblyRuntime : MonoBehaviour
             return Phase.Complete;
         }
     }
+    public int SeatedFansCount => (Seated("FanRear") ? 1 : 0) + (Seated("FanFront1") ? 1 : 0) + (Seated("FanFront2") ? 1 : 0);
+    public bool AllFansSeated => Seated("FanRear") && Seated("FanFront1") && Seated("FanFront2");
     bool HasGpuConnector => state.Parts.Exists(p => p != null && state.StepOf(p) == "GPUConnector");
-    internal bool PreparationComplete => Ready && Seated("Motherboard") && StepFastened("Motherboard") &&
-        Seated("FanRear") && StepFastened("FanRear") && Seated("FanFront1") && StepFastened("FanFront1") && Seated("FanFront2") && StepFastened("FanFront2") && FanAlignmentValid;
+    internal bool PreparationComplete => Ready && Seated("Motherboard") && StepFastened("Motherboard") && AllFansSeated && FanAlignmentValid;
     bool FanAlignmentValid => new[]{"FanRear","FanFront1","FanFront2"}.All(id =>
     {
         var part = state.FindPart(id); var socket = state.FindSocket(id);
@@ -522,8 +522,7 @@ public sealed partial class TechWiseDetailedAssemblyRuntime : MonoBehaviour
         Phase.InstallRAM => "RAM",
         Phase.InsertAndLowerM2 or Phase.TightenM2 => "M2",
         Phase.PrepareCase or Phase.PlaceMotherboard or Phase.TightenMotherboard => "Motherboard",
-        Phase.InstallRearFan => "FanRear",
-        Phase.InstallFrontFans => !Seated("FanFront1") || !StepFastened("FanFront1") ? "FanFront1" : "FanFront2",
+        Phase.InstallRearFan or Phase.InstallFrontFans => !Seated("FanRear") ? "FanRear" : !Seated("FanFront1") ? "FanFront1" : "FanFront2",
         Phase.InstallGpuConnector => "GPUConnector",
         Phase.InstallGpu => "GPU",
         Phase.InstallStorage => "Storage",
@@ -548,18 +547,18 @@ public sealed partial class TechWiseDetailedAssemblyRuntime : MonoBehaviour
         Phase.ApplyThermalPaste => "Grab the thermal-paste applicator. Aim its tip down at the centre of the CPU and hold the trigger until a visible paste blob is applied.",
         Phase.InstallCooler => "Align the cooler with the CPU's four mounting points and release. Thermal paste must be present.",
         Phase.TightenCooler => "Tighten each of the four cooler screws. Hold the screwdriver tip against one screw, align its shaft, then hold trigger. " + Count(CoolerScrews),
-        Phase.InstallRAM => "Install all four RAM sticks. Match the notch and slot direction. Align closely, then release; backwards and sideways sticks are rejected.",
+        Phase.InstallRAM => "Install all four RAM sticks. Match the notch and release to rest the stick above its slot. Grip it again, push straight down toward the motherboard, then release to seat it. Raised sticks are not installed.",
         Phase.InsertAndLowerM2 => !Seated("M2") ? "Match the angled SSD outline. Slide the connector into the slot with the free end raised (about 25 degrees), then release the grip." : "Grip the SSD's free-end handle and rotate your wrist to lower it onto the existing standoff. Release when flat.",
         Phase.TightenM2 => "Use the screwdriver on the M.2 retention screw. The SSD is not complete until the screw is fully tightened.",
         Phase.PrepareCase => "Grip the office-case side panel and remove it. The standoffs follow the motherboard's real mounting holes.",
         Phase.PlaceMotherboard => "Lift the prepared motherboard, align it with the case standoffs, then release into the mounting position.",
         Phase.TightenMotherboard => "Tighten every motherboard screw with the screwdriver, one at a time. " + Count(BoardScrews),
-        Phase.InstallRearFan => "Install the rear fan at the CPU-area exhaust grille. Its airflow arrow must point out through the rear ventilation.",
-        Phase.InstallFrontFans => "Install both front fans at their ventilation grilles. Their airflow arrows point from the front toward the interior.",
+        Phase.InstallRearFan => $"Install case fans ({SeatedFansCount} / 3 installed). Align airflow arrows with the grilles and release to seat each fan. No screws required.",
+        Phase.InstallFrontFans => $"Install case fans ({SeatedFansCount} / 3 installed). Align airflow arrows with the grilles and release to seat each fan. No screws required.",
         Phase.ValidateAirflow => "Check all three fan directions against their mounting arrows. Reversed airflow cannot complete this phase.",
         Phase.InstallGpuConnector => "Install the GPU connector in its highlighted bracket. Align the connector, then release grip.",
         Phase.InstallGpu => "Install the graphics card (with its attached cooler). Align it with the highlighted GPU socket, then release grip.",
-        Phase.InstallStorage => "Install the SATA SSD in the highlighted storage mount. Match its orientation and release grip.",
+        Phase.InstallStorage => "Install the SATA SSD in the highlighted storage mount. Match its orientation and release to seat. Screws are not required.",
         Phase.InstallPsu => "Install the power supply in the highlighted lower case bracket. Its power inlet faces the rear opening. Align and release grip.",
         _ => "PC assembly complete: CPU, cooler, RAM, M.2 SSD, motherboard, fans, GPU connector, graphics card, SATA SSD and power supply installed. In Competition, press Done on the verification monitor to test the PC."
     };
@@ -577,8 +576,7 @@ public sealed partial class TechWiseDetailedAssemblyRuntime : MonoBehaviour
             "RAM" when !StepFastened("CPUCooler") => "Tighten all cooler screws before installing RAM.",
             "M2" when !Seated("RAM") => "Install all RAM sticks before inserting the M.2 SSD.",
             "Motherboard" when !StepFastened("M2") || !StepFastened("CPUCooler") || !CasePrepared => "Finish the motherboard preparation and remove the case side panel first.",
-            "FanRear" when !StepFastened("Motherboard") => "Tighten all motherboard screws before installing fans.",
-            "FanFront1" or "FanFront2" when !Seated("FanRear") || !StepFastened("FanRear") => "Install the rear exhaust fan first.",
+            "FanRear" or "FanFront1" or "FanFront2" when !StepFastened("Motherboard") => "Tighten all motherboard screws before installing fans.",
             "GPUConnector" or "GPU" or "PSU" or "Storage" when !PreparationComplete => "Finish motherboard, case and fan assembly first.",
             "GPU" when HasGpuConnector && !Seated("GPUConnector") => "Install the GPU connector first.",
             "Storage" when !Seated("GPU") || !StepFastened("GPU") => "Install the graphics card first.",

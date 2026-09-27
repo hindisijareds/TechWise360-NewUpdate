@@ -58,6 +58,7 @@ public sealed class TechWiseSimulationRuntime : MonoBehaviour
         foreach (var part in Parts)
         {
             if (part == null) continue;
+            part.GetComponent<TechWiseRamInsertion>()?.ClearStage();
             if (filters.TryGetValue(part, out var filter)) part.selectFilters.Remove(filter);
             part.selectEntered.RemoveListener(OnGrab);
             part.selectExited.RemoveListener(OnRelease);
@@ -107,6 +108,8 @@ public sealed class TechWiseSimulationRuntime : MonoBehaviour
             if (tutorial && (tutorialStep == null || tutorialStep == "Motherboard" && !part.gameObject.activeInHierarchy)) continue;
             Parts.Add(part);
             partSteps[part] = TechWiseSimulationModeManager.ResolveStepId(part.transform);
+            if (partSteps[part] == "RAM" && part.GetComponent<TechWiseRamInsertion>() == null)
+                part.gameObject.AddComponent<TechWiseRamInsertion>();
             var networkObject = part.GetComponent<Unity.Netcode.NetworkObject>();
             if (networkObject != null && !networkObject.IsSpawned) networkObject.AutoObjectParentSync = false;
             foreach (var partCollider in part.colliders)
@@ -383,6 +386,7 @@ public sealed class TechWiseSimulationRuntime : MonoBehaviour
         }
         if (socket.IsSelecting(selectable)) return true;
         if (selectable is XRGrabInteractable held && IsHeld(held)) return false;
+        if (TechWiseSimulationModeManager.IsAssembly && selectable.transform.TryGetComponent<TechWiseRamInsertion>(out var ram) && !ram.AllowSocketSelection) return false;
         return PlacementProblem(socket, selectable as XRGrabInteractable, out _, out _) == null;
     }
 
@@ -400,6 +404,8 @@ public sealed class TechWiseSimulationRuntime : MonoBehaviour
             return "This component does not fit this target.";
         }
         if (socket.hasSelection && !socket.IsSelecting(part)) return "This target is already occupied.";
+        if (StepOf(socket) == "RAM" && Parts.Any(p => p != null && p != part && p.TryGetComponent<TechWiseRamInsertion>(out var ram) && ram.Socket == socket))
+            return "This slot already contains aligned RAM. Push that module down before using another slot.";
         var partAttach = part.GetAttachTransform(socket);
         var socketAttach = socket.GetAttachTransform(part);
         float attachDist = Vector3.Distance(partAttach.position, socketAttach.position);
@@ -454,6 +460,7 @@ public sealed class TechWiseSimulationRuntime : MonoBehaviour
         if (args.interactableObject is XRGrabInteractable part)
         {
             if (TechWiseSimulationModeManager.IsAssembly || !actionBefore.ContainsKey(part)) actionBefore[part] = TechWiseAssemblyHistory.Capture();
+            part.GetComponent<TechWiseRamInsertion>()?.BeginPress(args.interactorObject);
             touched.Add(part);
             part.throwOnDetach = false;
             // The board's solid collision envelope must not push a held CPU/RAM
@@ -466,10 +473,22 @@ public sealed class TechWiseSimulationRuntime : MonoBehaviour
     void AttachPartToSocket(XRGrabInteractable part, XRLockSocketInteractor socket)
     {
         if (part == null || socket == null) return;
-        if (IsHeld(part) || PlacementProblem(socket, part, out _, out _) != null || socket.interactionManager == null ||
-            !socket.interactionManager.IsSelectPossible((IXRSelectInteractor)socket, part)) return;
+        if (IsHeld(part) || PlacementProblem(socket, part, out _, out _) != null || socket.interactionManager == null) return;
+        if (TechWiseSimulationModeManager.IsAssembly && part.TryGetComponent<TechWiseRamInsertion>(out var ram) && !ram.AllowSocketSelection)
+        {
+            if (!ram.Staged)
+            {
+                ram.Stage(socket); pendingReleases.Remove(part);
+                if (actionBefore.Remove(part, out var beforeStage)) TechWiseAssemblyHistory.Commit(beforeStage);
+                RamFeedback(ram.Guidance);
+            }
+            return;
+        }
+        if (!socket.interactionManager.IsSelectPossible((IXRSelectInteractor)socket, part)) return;
         pendingReleases.Remove(part);
         foreach (var c in part.colliders)
+            if (c != null) c.isTrigger = true;
+        foreach (var c in part.GetComponentsInChildren<Collider>(true))
             if (c != null) c.isTrigger = true;
         var body = part.GetComponent<Rigidbody>();
         if (body != null)
@@ -511,6 +530,7 @@ public sealed class TechWiseSimulationRuntime : MonoBehaviour
 
     void OnRelease(SelectExitEventArgs args)
     {
+        if (args.interactableObject is XRGrabInteractable released && released.TryGetComponent<TechWiseRamInsertion>(out var ram) && ram.Release(args)) return;
         if (args.isCanceled || TechWisePauseSession.Active || TechWiseAssemblyHistory.Restoring) return;
         if (args.interactorObject is XRSocketInteractor || TechWiseDisassemblyRuntime.IsPreparing || ManipulationLocked) return;
         if (args.interactableObject is not XRGrabInteractable part) return;
@@ -670,17 +690,26 @@ public sealed class TechWiseSimulationRuntime : MonoBehaviour
             foreach (var part in Parts)
             {
                 if (part == null || part.isSelected || IsPartInstalled(part)) continue;
+                if (part.TryGetComponent<TechWiseRamInsertion>(out var ram) && ram.Staged) continue;
                 var body = part.GetComponent<Rigidbody>();
                 if (body == null) continue;
-                bool boardLocked = StepOf(part) == "Motherboard" && !MotherboardReady;
-                if (boardLocked) body.isKinematic = true;
-                else if (touched.Contains(part) || StepOf(part) == "Motherboard")
+                bool boardLocked = StepOf(part) == "Motherboard" && (!MotherboardReady || !touched.Contains(part));
+                if (boardLocked)
                 {
-                    body.isKinematic = false;
-                    body.useGravity = true;
-                    body.detectCollisions = true;
+                    if (!body.isKinematic)
+                    {
+                        body.linearVelocity = Vector3.zero;
+                        body.angularVelocity = Vector3.zero;
+                        body.isKinematic = true;
+                    }
+                }
+                else if (touched.Contains(part))
+                {
+                    if (body.isKinematic) body.isKinematic = false;
+                    if (!body.useGravity) body.useGravity = true;
+                    if (!body.detectCollisions) body.detectCollisions = true;
                     foreach (var collider in part.colliders)
-                        if (collider != null) collider.isTrigger = false;
+                        if (collider != null && collider.isTrigger) collider.isTrigger = false;
                 }
             }
         }
@@ -708,6 +737,8 @@ public sealed class TechWiseSimulationRuntime : MonoBehaviour
         else Feedback = $"{Label(step)} completed.";
         performedSteps.Add(step);
     }
+    internal void CompleteRamInsertion(XRGrabInteractable part, XRLockSocketInteractor socket) => AttachPartToSocket(part, socket);
+    internal void RamFeedback(string text) { Feedback = text; StateChanged?.Invoke(); }
     public void RecordMistake(string kind, string step, string explanation, string correction)
     {
         var key = kind + ":" + step;

@@ -17,12 +17,12 @@ public static class TechWiseBuildDefinition
         new("RAM", "RAM module", 4, 0, "four motherboard memory slots", "Hold each module by its ends, away from its gold contacts.", "Gold contacts go into the slot; match the keyed notch and keep the module upright."),
         new("M2", "M.2 SSD", 1, 1, "M.2 connector and free-end standoff", "Hold the PCB edges; raise the free end about 25 degrees.", "Slide the connector edge into the matching slot, release, then lower the free end."),
         new("Motherboard", "Motherboard", 1, 9, "case tray and nine matching PCB standoffs", "Support the board by its edges with the installed parts facing the case opening.", "Align the rear connectors with the rear case and all nine holes with standoffs."),
-        new("FanRear", "Rear exhaust fan", 1, 4, "rear grille beside the CPU", "Hold the frame, not the blades.", "Airflow points OUT of the rear grille. Align the four corner holes."),
-        new("FanFront1", "Upper front intake fan", 1, 4, "upper front grille", "Hold the frame, not the blades.", "Airflow points INTO the case from the front. Align the four corner holes."),
-        new("FanFront2", "Lower front intake fan", 1, 4, "lower front grille", "Hold the frame, not the blades.", "Airflow points INTO the case from the front. Align the four corner holes."),
+        new("FanRear", "Rear exhaust fan", 1, 0, "rear grille beside the CPU", "Hold the frame, not the blades.", "Airflow points OUT of the rear grille. Align the fan with its rear mounting position and release to seat. Screws are not required."),
+        new("FanFront1", "Upper front intake fan", 1, 0, "upper front grille", "Hold the frame, not the blades.", "Airflow points INTO the case from the front. Align the fan with its upper front mount and release to seat. Screws are not required."),
+        new("FanFront2", "Lower front intake fan", 1, 0, "lower front grille", "Hold the frame, not the blades.", "Airflow points INTO the case from the front. Align the fan with its lower front mount and release to seat. Screws are not required."),
         new("GPUConnector", "GPU connector", 1, 0, "existing GPU bracket", "Hold the connector body and align its keyed edge.", "Match the highlighted bracket pose; do not reverse the connector."),
         new("GPU", "Graphics card with attached cooler", 1, 2, "GPU socket and rear retaining bracket", "Hold the card edges and cooler housing, away from contacts.", "Align the gold edge with the expansion slot and rear outputs with the case opening."),
-        new("Storage", "SATA SSD", 1, 4, "existing storage mount", "Hold the SSD housing.", "Match the drive mount orientation with its connector end facing the existing target direction."),
+        new("Storage", "SATA SSD", 1, 0, "existing storage mount", "Hold the SSD housing.", "Align the SATA SSD with the case drive mount and release to seat. Screws are not required."),
         new("PSU", "Power supply", 1, 4, "lower case PSU bracket", "Hold the power-supply housing.", "The mains inlet and switch face OUT through the rear opening.")
     };
     public static readonly string[] AssemblyOrder = Components.Select(c => c.id).ToArray();

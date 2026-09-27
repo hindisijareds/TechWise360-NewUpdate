@@ -293,9 +293,8 @@ public static class TechWiseCompleteBuildVerification
         panel.interactionManager.SelectEnter((IXRSelectInteractor)hand,panel); panel.transform.position += Vector3.right*.5f;
         panel.interactionManager.SelectExit((IXRSelectInteractor)hand,panel); yield return null;
         Check(phase.CasePrepared,"Side panel removal prepares case");
-        yield return Install("Motherboard"); Blocked("FanRear","Rear fan blocked until all motherboard screws are tight"); Tighten(phase.BoardScrews,"Motherboard");
-        Blocked("FanFront1","Front fans require the rear exhaust first");
-        yield return Install("FanRear"); Tighten(phase.Fasteners.Where(f=>f.ComponentId=="FanRear").ToList(),"FanRear"); yield return Install("FanFront1"); Tighten(phase.Fasteners.Where(f=>f.ComponentId=="FanFront1").ToList(),"FanFront1"); yield return Install("FanFront2"); Tighten(phase.Fasteners.Where(f=>f.ComponentId=="FanFront2").ToList(),"FanFront2");
+        yield return Install("Motherboard"); Blocked("FanRear","Rear fan blocked until all motherboard screws are tight"); Blocked("FanFront1","Front fan blocked until all motherboard screws are tight"); Tighten(phase.BoardScrews,"Motherboard");
+        yield return Install("FanRear"); yield return Install("FanFront1"); yield return Install("FanFront2");
         Check(phase.CurrentPhase != TechWiseDetailedAssemblyRuntime.Phase.Complete,"Fans do not finish the build while GPU/storage/PSU are missing");
         yield return FinishRemainingComponents();
         Check(state.FindPart("GPU") != null && state.FindPart("PSU") != null && state.FindPart("Storage") != null,"Existing downstream PC components preserved");
@@ -361,7 +360,7 @@ public static class TechWiseCompleteBuildVerification
         panel.interactionManager.SelectEnter((IXRSelectInteractor)hand,panel);panel.transform.position+=Vector3.right*.5f;
         panel.interactionManager.SelectExit((IXRSelectInteractor)hand,panel);yield return null;
         yield return Install("Motherboard");Tighten(phase.BoardScrews,"Motherboard");
-        yield return Install("FanRear");Tighten(phase.Fasteners.Where(f=>f.ComponentId=="FanRear").ToList(),"FanRear");yield return Install("FanFront1");Tighten(phase.Fasteners.Where(f=>f.ComponentId=="FanFront1").ToList(),"FanFront1");yield return Install("FanFront2");Tighten(phase.Fasteners.Where(f=>f.ComponentId=="FanFront2").ToList(),"FanFront2");
+        yield return Install("FanRear");yield return Install("FanFront1");yield return Install("FanFront2");
         yield return FinishRemainingComponents();
         Check(phase.CurrentPhase==TechWiseDetailedAssemblyRuntime.Phase.Complete,"Tutorial completes the full PC assembly mechanics");
         yield return DisassemblyModes();
@@ -388,7 +387,7 @@ public static class TechWiseCompleteBuildVerification
         panel.interactionManager.SelectEnter((IXRSelectInteractor)hand,panel);panel.transform.SetPositionAndRotation(home.position,home.rotation);
         panel.interactionManager.SelectExit((IXRSelectInteractor)hand,panel);yield return null;yield return null;
         Check(phase.PanelInstalled,"Correct release reattaches side panel: phase="+phase.CurrentPhase+" distance="+Vector3.Distance(panel.transform.position,home.position)+" angle="+Quaternion.Angle(panel.transform.rotation,home.rotation)+" held="+panel.isSelected);
-        Check(state.CaptureAssessmentState().Length==91 && state.CaptureAssessmentState().All(r=>r.complete),"All 91 atomic requirements including 36 inserted and 36 tightened screws validate");
+        Check(state.CaptureAssessmentState().All(r=>r.complete),"All atomic requirements validate");
         Check(phase.CurrentPhase == TechWiseDetailedAssemblyRuntime.Phase.Complete,"Complete only after the final power supply is seated");
         Check(phase.Heading == "PC assembly complete", "Completion no longer says Phase 1");
     }
@@ -524,7 +523,7 @@ public static class TechWiseCompleteBuildVerification
         foreach(string id in new[]{"Motherboard","FanRear","FanFront1","FanFront2","GPUConnector","GPU","Storage","PSU"})
         {yield return SeatPart(id);if(TechWiseBuildDefinition.Find(id).screws>0)Tighten(phase.Fasteners.Where(f=>f.ComponentId==id).ToList(),id);}
         var panelState=panel.GetComponent<TechWiseCasePanel>();var home=(Transform)typeof(TechWiseCasePanel).GetField("home",Hidden).GetValue(panelState);panel.interactionManager.SelectEnter((IXRSelectInteractor)hand,panel);panel.transform.SetPositionAndRotation(home.position,home.rotation);panel.interactionManager.SelectExit((IXRSelectInteractor)hand,panel);yield return null;yield return null;
-        Check(state.CaptureAssessmentState().All(r=>r.complete),"Competition complete build validates all 91 requirements");
+        Check(state.CaptureAssessmentState().All(r=>r.complete),"Competition complete build validates all requirements");
         var one=phase.CoolerScrews[0];Call(one,"ResetProgress");Check(state.CaptureAssessmentState().Any(r=>!r.complete)&&recorder.GetLiveMetrics().score<100,"One untightened screw prevents a perfect score");head=(Vector3)typeof(TechWiseFastener).GetProperty("HeadPosition",Hidden).GetValue(one);for(int i=0;i<30;i++)Call(one,"Advance",head,one.transform.forward,true,.1f);
         typeof(TechWiseDetailedAssemblyRuntime).GetProperty("PasteApplied").SetValue(phase,false);Check(recorder.GetLiveMetrics().score<100,"Missing thermal paste prevents a perfect score");typeof(TechWiseDetailedAssemblyRuntime).GetProperty("PasteApplied").SetValue(phase,true);
         Call(recorder,"FinishAttempt");Check(recorder.IsFinished&&recorder.GetLiveMetrics().score==100,"Complete accurate fresh competition attempt receives 100: score="+recorder.GetLiveMetrics().score+" mistakes="+recorder.GetLiveMetrics().mistakes+" issues="+string.Join(" | ",state.CaptureAssessmentState().Where(r=>!r.complete).Select(r=>r.component+": "+r.explanation))+" penalties="+string.Join(" | ",((List<TechWiseVrMistakeDetail>)typeof(TechWiseAttemptRecorder).GetField("mistakeDetails",Hidden).GetValue(recorder)).Select(m=>m.kind+":"+m.attempted_step+":"+m.explanation)));

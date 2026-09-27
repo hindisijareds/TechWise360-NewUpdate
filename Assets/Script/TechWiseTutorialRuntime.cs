@@ -391,6 +391,7 @@ public sealed class TechWiseTutorialRuntime : MonoBehaviour
         yield return new WaitForSecondsRealtime(0.25f);
         if (!InTutorial || stage != Stage.Assembly || part == null) yield break;
         var state=TechWiseSimulationRuntime.Instance;
+        if (part.TryGetComponent<TechWiseRamInsertion>(out var ram) && ram.Staged) { Feedback=ram.Guidance; yield break; }
         if (!TechWiseSimulationModeManager.IsDisassembly && !state.IsPartInstalled(part))
         {
             var target=state.Sockets.Find(s=>s!=null && !s.hasSelection && TechWiseSimulationRuntime.Matches(s,part.transform));
@@ -424,6 +425,8 @@ public sealed class TechWiseTutorialRuntime : MonoBehaviour
             bool valid = next != null && socket != null && state.PlacementProblem(socket, next, out _, out _) == null;
             if (next != null && TechWiseSimulationRuntime.IsHeld(next) && socket != null)
                 Feedback = state.PlacementProblem(socket, next, out _, out var correction) == null ? "Aligned. Release the grip to seat the component." : correction;
+            if (!TechWiseSimulationModeManager.IsDisassembly && next != null && next.TryGetComponent<TechWiseRamInsertion>(out var ram) && (ram.Staged || valid))
+                Feedback = ram.Guidance;
             foreach (var s in state.Sockets) if (s != null) s.showInteractableHoverMeshes = s == socket;
             if (phase.CurrentFastener != null)
             {

@@ -26,6 +26,7 @@ internal static class TechWiseAssemblyHistory
     {
         internal XRGrabInteractable part;
         internal XRLockSocketInteractor socket;
+        internal XRLockSocketInteractor raisedRamSocket;
         internal Pose pose;
         internal bool active,kinematic,gravity;
         internal readonly Dictionary<Collider,bool> triggers=new();
@@ -43,6 +44,7 @@ internal static class TechWiseAssemblyHistory
         {
             if(part==null) continue; var body=part.GetComponent<Rigidbody>();
             var saved=new PartState { part=part,socket=state.Sockets.Find(s=>s!=null&&s.IsSelecting(part)),
+                raisedRamSocket=part.GetComponent<TechWiseRamInsertion>()?.Socket,
                 pose=new Pose(part.transform.position,part.transform.rotation),active=part.gameObject.activeSelf,kinematic=body==null||body.isKinematic,gravity=body!=null&&body.useGravity };
             foreach(var c in part.colliders) if(c!=null) saved.triggers[c]=c.isTrigger;
             value.parts.Add(saved);
@@ -64,6 +66,7 @@ internal static class TechWiseAssemblyHistory
         Restoring=true;
         try
         {
+            foreach(var part in state.Parts) if(part!=null) part.GetComponent<TechWiseRamInsertion>()?.ClearStage();
             foreach(var part in value.parts.Select(p=>p.part).Concat(value.screws.Select(s=>s.screw.Grab)).Concat(TechWiseAssemblyTool.Tools.Select(t=>t.GetComponent<XRGrabInteractable>())).Append(runtime.SidePanel).Where(p=>p!=null).Distinct())
                 foreach(var owner in part.interactorsSelecting.ToArray()) part.interactionManager.SelectCancel(owner,part);
             runtime.RestoreMechanics(value.paste,value.prepared,value.lowered,value.cover,value.lever,value.m2);
@@ -82,6 +85,7 @@ internal static class TechWiseAssemblyHistory
                     saved.socket.interactionManager.SelectEnter((IXRSelectInteractor)saved.socket,part);
                 }
                 else if(body!=null) body.isKinematic=saved.kinematic;
+                if(saved.raisedRamSocket!=null) part.GetComponent<TechWiseRamInsertion>().Stage(saved.raisedRamSocket);
                 foreach(var pair in saved.triggers) if(pair.Key!=null) pair.Key.isTrigger=pair.Value;
                 if(body!=null&&!body.isKinematic) body.linearVelocity=body.angularVelocity=Vector3.zero;
             }

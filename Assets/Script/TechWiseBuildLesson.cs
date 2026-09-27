@@ -1,4 +1,4 @@
-﻿using System.Linq;
+using System.Linq;
 using System.Text;
 
 internal static class TechWiseBuildLesson
@@ -90,6 +90,32 @@ internal static class TechWiseBuildLesson
             error=remove?"Secured components cannot be pulled out; a held component is not a completed removal.":"Backwards, upside-down, misaligned or wrong-slot releases do not advance the lesson.";
             correction=remove?"Complete every screw/lock first, then re-grip, withdraw and release the component clear of the mount.":"Re-grip the loose component; align its keyed edge to the indicated target and release. Green alignment feedback means ready to seat.";
             if(step=="RAM") { int seated=state.Parts.Count(p=>state.StepOf(p)=="RAM"&&state.IsPartInstalled(p)); progress=remove?$"RAM modules: {4-seated} / 4 removed.":$"RAM modules: {seated} / 4 seated. Each module must be handled separately."; }
+            if(step=="RAM" && !remove)
+            {
+                action="Align the keyed notch and RELEASE to rest the module slightly above its slot. Then hold "+TechWiseControlLabels.Grab+" on that module again, push straight DOWN toward the motherboard, and release when fully pressed.";
+                validation="Each module needs an aligned release AND a separate downward press and release. Raised RAM does not count as installed. Seat all four modules.";
+                error="Releasing above the slot alone, pressing sideways, or releasing before the module is fully down leaves it unseated.";
+                correction="Grip the raised module and push down about 2 cm. Release at the bottom. Pull up or sideways clear of the slot to reposition it.";
+            }
+            if(step == "Storage")
+            {
+                progress=remove?"SATA SSD removed.":(runtime.Seated("Storage")?"SATA SSD installed. Screws are not required.":"SATA SSD uninstalled. Screws are not required.");
+                if(!remove)
+                {
+                    action="Hold the SATA SSD housing with "+TechWiseControlLabels.Grab+". Match the drive mount orientation and release to seat. Screws are not required.";
+                    validation="The SATA SSD snaps securely into the case mount. Screws are not required.";
+                }
+            }
+            if(step is "FanRear" or "FanFront1" or "FanFront2")
+            {
+                int seated=(runtime.Seated("FanRear")?1:0)+(runtime.Seated("FanFront1")?1:0)+(runtime.Seated("FanFront2")?1:0);
+                progress=remove?$"Case fans: {3-seated} / 3 removed.":$"Case fans: {seated} / 3 installed. Align airflow arrow with each grille. No screws required.";
+                if(!remove)
+                {
+                    action="Hold the fan frame with "+TechWiseControlLabels.Grab+". Match the airflow arrow to the grille (rear exhaust points OUT, front intakes point IN). Bring to the mount and release to seat. Screws are not required.";
+                    validation="All 3 case fans must be installed in their matching grilles. Screws are not required for fans.";
+                }
+            }
             int index=System.Array.IndexOf(remove?TechWiseBuildDefinition.DisassemblyOrder:TechWiseBuildDefinition.AssemblyOrder,step);
             var order=remove?TechWiseBuildDefinition.DisassemblyOrder:TechWiseBuildDefinition.AssemblyOrder;
             next=definition!=null&&definition.screws>0&&!remove?"Insert and tighten all "+definition.screws+" numbered screws, one by one.":index>=0&&index+1<order.Length?"Continue with "+TechWiseSimulationRuntime.Label(order[index+1])+".":remove?"Complete the disassembly review.":"Reinstall the case side panel.";
